@@ -1,4 +1,4 @@
-/****************************************************************************
+/*****************************************************************************
 * 
 * Copyright (c) 2008 by Yao Wei, all rights reserved.
 *
@@ -22,7 +22,7 @@
 
 using namespace std;
 
-std::string resultDir = "../test/";
+static std::string resultDir = "../test/";
 //std::string resultDir = "../test2/";
 
 static void usage()
@@ -68,7 +68,7 @@ int _main(int argc, char** argv)
 
 	if (atoi(argv[1]) == 0) {
 		//search shape by aam
-		AAM * aam;
+		AAM * aam = NULL;
 		int type;
 		std::string aamFileName = resultDir + "Group" + std::string(argv[3]) + ".aam_ic";
 		std::ifstream fs(aamFileName);
@@ -167,7 +167,8 @@ int _main(int argc, char** argv)
 	std::ifstream model(mfile);
 	face_predict.Read(model);
 	model.close();
-	IplImage* newImage = face_predict.predict(Shape, *originalImage, ShapeF, *ImageF, ratioF, ShapeM, *ImageM, ratioM, atoi(argv[3]), atoi(argv[4]), false);
+	//predict(const AAM_Shape& shape, const IplImage& curImage, int curAgeG, int newAgeG, bool save)
+	IplImage* newImage = face_predict.predict(Shape, *originalImage, /*ShapeF, *ImageF, ratioF, ShapeM, *ImageM, ratioM,*/ atoi(argv[3]), atoi(argv[4]), false);
 	std::string newfile = std::string(argv[2]);
 	newfile = newfile.insert(newfile.find_last_of('/')+1, "result_" );
 	newfile = newfile.insert(newfile.find_last_of('.'), std::string("_G" + std::string(argv[4])));

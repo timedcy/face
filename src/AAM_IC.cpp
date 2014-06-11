@@ -306,7 +306,7 @@ void AAM_IC::Train(const std::vector<AAM_Shape>& AllShapes, const std::vector<Ip
 	char gid[10];
 	itoa(gi, gid,10);
 	std::string name = std::string(gid);
-	std::string resultDir = "../test/";
+	std::string resultDir = "./test/";
 	//std::string resultDir = "../test2/";
 	std::string dir = resultDir + "meanFace/meanG" + name  + ".jpg";
 	__paw.SaveWarpImageFromVector(dir.c_str(), __texture.GetMean());

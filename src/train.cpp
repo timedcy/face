@@ -1,4 +1,4 @@
-/****************************************************************************
+/*****************************************************************************
 * 
 * Copyright (c) 2008 by Yao Wei, all rights reserved.
 *
@@ -23,7 +23,7 @@ using namespace std;
 
 enum{ TYPE_AAM_BASIC = 0, TYPE_AAM_IC = 1};
 
-std::string resultDir = "../trainingSets/";
+std::string resultDir = "./trainingSets/";
 //std::string resultDir = "../test2/";
 
 //CvMat* AllTextures = cvCreateMat(315, 85000, CV_64FC1);
@@ -84,56 +84,56 @@ int main(int argc, char** argv)
 		AllShapes.push_back(referenceShape);
 	}
 
-	//============================== train AAM ===============================
-	if (atoi(argv[1])!=0 && atoi(argv[1])!=1)
-		printf("Un-Supported AAM type!\n");
+	////============================== train AAM ===============================
+	//if (atoi(argv[1])!=0 && atoi(argv[1])!=1)
+	//	printf("Un-Supported AAM type!\n");
 
-	else {
-		int group_size = 0;
-		std::vector<AAM_Shape> GroupShapes;	
-		std::vector<AAM_Shape>::iterator itr_shape = AllShapes.begin();
-		std::vector<IplImage*> GroupImages;
-		std::vector<IplImage*>::iterator itr_image = AllImages.begin();
+	//else {
+	//	int group_size = 0;
+	//	std::vector<AAM_Shape> GroupShapes;	
+	//	std::vector<AAM_Shape>::iterator itr_shape = AllShapes.begin();
+	//	std::vector<IplImage*> GroupImages;
+	//	std::vector<IplImage*>::iterator itr_image = AllImages.begin();
 
-		for (int i = 0; i < NGROUPS; i++) {
+	//	for (int i = 0; i < NGROUPS; i++) {
 
-			//get the samples in a designated age group
-			group_size = 0;
-			for (int j = AGE_GROUPS[i][0]; j <= AGE_GROUPS[i][1]; j++)
-				group_size += nG_Samples[j];
+	//		//get the samples in a designated age group
+	//		group_size = 0;
+	//		for (int j = AGE_GROUPS[i][0]; j <= AGE_GROUPS[i][1]; j++)
+	//			group_size += nG_Samples[j];
 
-			for (int j = 0; j < group_size; j++, itr_shape++, itr_image++) {
-				GroupShapes.push_back(*itr_shape);
-				GroupImages.push_back(*itr_image);
-			}
+	//		for (int j = 0; j < group_size; j++, itr_shape++, itr_image++) {
+	//			GroupShapes.push_back(*itr_shape);
+	//			GroupImages.push_back(*itr_image);
+	//		}
 
-			//train Basic AAM
-			if(atoi(argv[1])==0) {
-				AAM_Basic aam; aam.Train(GroupShapes, GroupImages);
+	//		//train Basic AAM
+	//		if(atoi(argv[1])==0) {
+	//			AAM_Basic aam; aam.Train(GroupShapes, GroupImages);
 
-				std::string aamfile = resultDir + "Group" + int2string(i) +".aam_basic";
-				std::ofstream fs(aamfile.c_str());
-				fs << TYPE_AAM_BASIC << std::endl;
-				aam.Write(fs);
-				fs.close();
-			}
+	//			std::string aamfile = resultDir + "Group" + int2string(i) +".aam_basic";
+	//			std::ofstream fs(aamfile.c_str());
+	//			fs << TYPE_AAM_BASIC << std::endl;
+	//			aam.Write(fs);
+	//			fs.close();
+	//		}
 
-			//train AAM Inverse compositional
-			else {
-				AAM_IC aam_ic; aam_ic.Train(GroupShapes, GroupImages);
-		
-				std::string aamfile = resultDir + "Group" + int2string(i) +".aam_ic";
-				std::ofstream fs(aamfile.c_str());
-				fs << TYPE_AAM_IC << std::endl;
-				aam_ic.Write(fs);
-				fs.close();
-			}
-			GroupShapes.clear();
-			GroupImages.clear();
-		}
-	}
+	//		//train AAM Inverse compositional
+	//		else {
+	//			AAM_IC aam_ic; aam_ic.Train(GroupShapes, GroupImages);
+	//	
+	//			std::string aamfile = resultDir + "Group" + int2string(i) +".aam_ic";
+	//			std::ofstream fs(aamfile.c_str());
+	//			fs << TYPE_AAM_IC << std::endl;
+	//			aam_ic.Write(fs);
+	//			fs.close();
+	//		}
+	//		GroupShapes.clear();
+	//		GroupImages.clear();
+	//	}
+	//}
 
-	//==========================train Face Predict model===================
+	////==========================train Face Predict model===================
 	FacePredict face_predict;
 	face_predict.Train(AllShapes, AllImages, nG_Samples, /*AllTextures,*/ 0.95, 0.95);
 
