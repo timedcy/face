@@ -22,7 +22,7 @@
 
 using namespace std;
 
-static std::string resultDir = "../test/";
+static std::string resultDir = "trainingSets/tmp/";
 //std::string resultDir = "../test2/";
 
 static void usage()
@@ -37,27 +37,17 @@ static void usage()
 	exit(0);
 }
 
-int _main(int argc, char** argv)
-{
-	if(argc < 5) usage();
 
-	//load image
-	IplImage* originalImage = cvLoadImage(argv[2], 1);
+extern "C"
+char* faceAging(string imgPath, int curAgeG, int newAgeG)
+{
+	static std::string resultDir = "trainingSets/tmp/";
+    //load image
+	IplImage* originalImage = cvLoadImage(imgPath.c_str(), 1);
 	if(originalImage==0){
 		fprintf(stderr, "ERROR(%s, %d): Cannot open image file %s!\n",
-			__FILE__, __LINE__, argv[2]);
+			__FILE__, __LINE__, imgPath.c_str());
 		exit(0);
-	}
-
-	IplImage* ImageF; 
-	IplImage* ImageM; 
-	double ratioF = 0;
-	double ratioM = 0;
-	if (argc == 9) {
-		ImageF = cvLoadImage(argv[5], 1);
-		ImageM = cvLoadImage(argv[7], 1);
-		double ratioF = atof(argv[6]);
-		double ratioM = atof(argv[8]);
 	}
 	
 	IplImage * image = cvCreateImage(cvGetSize(originalImage), originalImage->depth, originalImage->nChannels);
@@ -66,66 +56,49 @@ int _main(int argc, char** argv)
 	AAM_Shape ShapeF;
 	AAM_Shape ShapeM;
 
-	if (atoi(argv[1]) == 0) {
-		//search shape by aam
-		AAM * aam = NULL;
-		int type;
-		std::string aamFileName = resultDir + "Group" + std::string(argv[3]) + ".aam_ic";
-		std::ifstream fs(aamFileName);
-		if(fs == 0) {
-			fprintf(stderr, "ERROR(%s: %d): Cannot open file %s!\n", __FILE__, __LINE__, resultDir+"Group"+ std::string(argv[3]) +".aam_ic");
-			exit(0);
-		}
-		fs >> type;
 
-		//aam-basic
-		if(type == 0)		aam = new AAM_Basic;
-		else if(type == 1)  aam = new AAM_IC;
-	
-		//read model from file
-		aam->Read(fs);
-		fs.close();
+	//search shape by aam
+	AAM * aam = NULL;
+	int type;
+	char tmpChar[2];
 
-		//intial face detector
-		AAM_VJFaceDetect fjdetect;
-		fjdetect.LoadCascade("../bin/haarcascade_frontalface_alt2.xml");
-
-		//detect face for intialization
-		Shape = fjdetect.Detect(image, aam->GetMeanShape());
-
-		//do image alignment
-		aam->Fit(image, Shape, 30, false);  //if true, show process
-
-		ofstream outfile;
-		outfile.open( resultDir + "aam_result.txt" );
-		Shape.Write( outfile );
-		outfile.close();
-
-		//show GUI
-		cvNamedWindow("AAMFitting");
-		aam->Draw(image, 0);
-		cvShowImage("AAMFitting", image);
-		cvWaitKey(0);
+	itoa(curAgeG, tmpChar, 10);
+	std::string aamFileName = resultDir + "Group" + std::string(tmpChar) + ".aam_ic";
+	std::ifstream fs(aamFileName);
+	if(fs == 0) {
+		fprintf(stderr, "ERROR(%s: %d): Cannot open file %s!\n", __FILE__, __LINE__, resultDir+"Group"+ "_x.aam_ic");
+		exit(0);
 	}
-	
-	else {
-		//read shape from file
-		std::string filename = std::string(argv[2]);
-		filename = filename.substr(0, filename.length()-3) + "pts";
-		Shape.ReadPTS(filename);
+	fs >> type;
 
-		if (argc == 9) {
-			//read father's shape
-			std::string filenameF = std::string(argv[5]);
-			filenameF = filenameF.substr(0, filenameF.length()-3) + "pts";
-			ShapeF.ReadPTS(filenameF);
-			
-			//read mother's shape
-			std::string filenameM = std::string(argv[7]);
-			filenameM = filenameM.substr(0, filenameM.length()-3) + "pts";
-			ShapeM.ReadPTS(filenameM);
-		}
-	}
+	//aam-basic
+	if(type == 0)		aam = new AAM_Basic;
+	else if(type == 1)  aam = new AAM_IC;
+	
+	//read model from file
+	aam->Read(fs);
+	fs.close();
+
+	//intial face detector
+	AAM_VJFaceDetect fjdetect;
+	fjdetect.LoadCascade("haarcascade_frontalface_alt2.xml");
+
+	//detect face for intialization
+	Shape = fjdetect.Detect(image, aam->GetMeanShape());
+
+	//do image alignment
+	aam->Fit(image, Shape, 30, false);  //if true, show process
+
+	ofstream outfile;
+	outfile.open( resultDir + "aam_result.txt" );
+	Shape.Write( outfile );
+	outfile.close();
+
+	//show GUI
+	cvNamedWindow("AAMFitting");
+	aam->Draw(image, 0);
+	cvShowImage("AAMFitting", image);
+	
 
 	//resize the current image
 	cvSetImageROI(originalImage, cvRect(Shape.MinX(), Shape.MinY(), Shape.GetWidth(), Shape.GetHeight()));
@@ -141,7 +114,6 @@ int _main(int argc, char** argv)
 
 	cvNamedWindow("CurrentFacialImage");
 	cvShowImage("CurrentFacialImage", stdImage);
-
 
 	//draw the shape
 	CvSize ssize;
@@ -168,10 +140,10 @@ int _main(int argc, char** argv)
 	face_predict.Read(model);
 	model.close();
 	//predict(const AAM_Shape& shape, const IplImage& curImage, int curAgeG, int newAgeG, bool save)
-	IplImage* newImage = face_predict.predict(Shape, *originalImage, /*ShapeF, *ImageF, ratioF, ShapeM, *ImageM, ratioM,*/ atoi(argv[3]), atoi(argv[4]), false);
-	std::string newfile = std::string(argv[2]);
+	IplImage* newImage = face_predict.predict(Shape, *originalImage, /*ShapeF, *ImageF, ratioF, ShapeM, *ImageM, ratioM,*/ curAgeG, newAgeG, true);
+	std::string newfile = std::string(imgPath);
 	newfile = newfile.insert(newfile.find_last_of('/')+1, "result_" );
-	newfile = newfile.insert(newfile.find_last_of('.'), std::string("_G" + std::string(argv[4])));
+	newfile = newfile.insert(newfile.find_last_of('.'), std::string("_G"));
 	cvSaveImage(newfile.c_str(), newImage);
 	
 	cvNamedWindow("PredictedFacialImage");
@@ -179,6 +151,153 @@ int _main(int argc, char** argv)
 	cvWaitKey(0);
 
 	cvReleaseImage(&image);
+	char* result = new char[128];
+	strcpy(result, newfile.c_str());
+	return result;
+}
 
+int main(int argc, char** argv)
+{
+	//if(argc < 5) usage();
+
+	////load image
+	//IplImage* originalImage = cvLoadImage(argv[2], 1);
+	//if(originalImage==0){
+	//	fprintf(stderr, "ERROR(%s, %d): Cannot open image file %s!\n",
+	//		__FILE__, __LINE__, argv[2]);
+	//	exit(0);
+	//}
+
+	//IplImage* ImageF; 
+	//IplImage* ImageM; 
+	//double ratioF = 0;
+	//double ratioM = 0;
+	//if (argc == 9) {
+	//	ImageF = cvLoadImage(argv[5], 1);
+	//	ImageM = cvLoadImage(argv[7], 1);
+	//	double ratioF = atof(argv[6]);
+	//	double ratioM = atof(argv[8]);
+	//}
+	//
+	//IplImage * image = cvCreateImage(cvGetSize(originalImage), originalImage->depth, originalImage->nChannels);
+	//cvCopy(originalImage, image);
+	//AAM_Shape Shape;
+	//AAM_Shape ShapeF;
+	//AAM_Shape ShapeM;
+
+	//if (atoi(argv[1]) == 0) {
+	//	//search shape by aam
+	//	AAM * aam = NULL;
+	//	int type;
+	//	std::string aamFileName = resultDir + "Group" + std::string(argv[3]) + ".aam_ic";
+	//	std::ifstream fs(aamFileName);
+	//	if(fs == 0) {
+	//		fprintf(stderr, "ERROR(%s: %d): Cannot open file %s!\n", __FILE__, __LINE__, resultDir+"Group"+ std::string(argv[3]) +".aam_ic");
+	//		exit(0);
+	//	}
+	//	fs >> type;
+
+	//	//aam-basic
+	//	if(type == 0)		aam = new AAM_Basic;
+	//	else if(type == 1)  aam = new AAM_IC;
+	//
+	//	//read model from file
+	//	aam->Read(fs);
+	//	fs.close();
+
+	//	//intial face detector
+	//	AAM_VJFaceDetect fjdetect;
+	//	fjdetect.LoadCascade("haarcascade_frontalface_alt2.xml");
+
+	//	//detect face for intialization
+	//	Shape = fjdetect.Detect(image, aam->GetMeanShape());
+
+	//	//do image alignment
+	//	aam->Fit(image, Shape, 30, false);  //if true, show process
+
+	//	ofstream outfile;
+	//	outfile.open( resultDir + "aam_result.txt" );
+	//	Shape.Write( outfile );
+	//	outfile.close();
+
+	//	//show GUI
+	//	cvNamedWindow("AAMFitting");
+	//	aam->Draw(image, 0);
+	//	cvShowImage("AAMFitting", image);
+	//}
+	//
+	//else {
+	//	//read shape from file
+	//	std::string filename = std::string(argv[2]);
+	//	filename = filename.substr(0, filename.length()-3) + "pts";
+	//	Shape.ReadPTS(filename);
+
+	//	if (argc == 9) {
+	//		//read father's shape
+	//		std::string filenameF = std::string(argv[5]);
+	//		filenameF = filenameF.substr(0, filenameF.length()-3) + "pts";
+	//		ShapeF.ReadPTS(filenameF);
+	//		
+	//		//read mother's shape
+	//		std::string filenameM = std::string(argv[7]);
+	//		filenameM = filenameM.substr(0, filenameM.length()-3) + "pts";
+	//		ShapeM.ReadPTS(filenameM);
+	//	}
+	//}
+
+	////resize the current image
+	//cvSetImageROI(originalImage, cvRect(Shape.MinX(), Shape.MinY(), Shape.GetWidth(), Shape.GetHeight()));
+	//IplImage *facialImage = cvCreateImage(cvGetSize(originalImage), originalImage->depth, originalImage->nChannels);
+	//cvCopy(originalImage, facialImage, NULL);
+	//cvResetImageROI(originalImage);
+
+	//CvSize stdsize;
+	//stdsize.width = stdwidth;
+	//stdsize.height = stdwidth / facialImage->width * facialImage->height;
+	//IplImage *stdImage = cvCreateImage(stdsize, originalImage->depth, originalImage->nChannels);
+	//cvResize(facialImage, stdImage, CV_INTER_LINEAR);
+
+	//cvNamedWindow("CurrentFacialImage");
+	//cvShowImage("CurrentFacialImage", stdImage);
+
+	////draw the shape
+	//CvSize ssize;
+	//ssize.width = 130;
+	//ssize.height = 130;
+	//IplImage *shapeImg = cvCreateImage(ssize, originalImage->depth, originalImage->nChannels);
+	//cvSet(shapeImg, CV_RGB(0,0,0));
+	//AAM_Shape temShape = Shape;
+	//double orgwid = temShape.MaxX() - temShape.MinX();
+	//double orghei = temShape.MaxY() - temShape.MinY();
+	//for (int i = 0; i < 68; i++) {
+	//	temShape[i].x = (temShape[i].x - Shape.MinX()) * stdwidth / orgwid;
+	//	temShape[i].y = (temShape[i].y - Shape.MinY()) * stdsize.height / orghei;
+	//}
+	//temShape.Sketch(shapeImg);
+	//cvShowImage("shape", shapeImg);
+	//cvReleaseImage(&shapeImg);
+
+
+	////Facial Prediction
+	//FacePredict face_predict;
+	//std::string mfile = resultDir + "facial.predict_model";
+	//std::ifstream model(mfile);
+	//face_predict.Read(model);
+	//model.close();
+	////predict(const AAM_Shape& shape, const IplImage& curImage, int curAgeG, int newAgeG, bool save)
+	//IplImage* newImage = face_predict.predict(Shape, *originalImage, /*ShapeF, *ImageF, ratioF, ShapeM, *ImageM, ratioM,*/ atoi(argv[3]), atoi(argv[4]), true);
+	//std::string newfile = std::string(argv[2]);
+	//newfile = newfile.insert(newfile.find_last_of('/')+1, "result_" );
+	//newfile = newfile.insert(newfile.find_last_of('.'), std::string("_G" + std::string(argv[4])));
+	//cvSaveImage(newfile.c_str(), newImage);
+	//
+	//cvNamedWindow("PredictedFacialImage");
+	//cvShowImage("PredictedFacialImage", newImage);
+	//cvWaitKey(0);
+
+	//cvReleaseImage(&image);
+
+	cout << faceAging("input.jpg", 2, 3) << endl;
+	system("pause");
 	return 0;
 }

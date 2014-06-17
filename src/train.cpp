@@ -45,7 +45,7 @@ static void usage()
 	exit(0);
 }
 
-int main(int argc, char** argv)
+int __main(int argc, char** argv)
 {
 	if(argc != 5)		 
 		usage();
@@ -148,5 +148,6 @@ int main(int argc, char** argv)
 		AllShapes[j].clear();
 	}
 	
+	system("pause");
 	return 0;
 }
