@@ -39,16 +39,16 @@
     <ClCompile Include="src\AAM_Util.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\AAM_VJFaceDetect.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\FacePredict.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\fit.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\train.cpp">
+    <ClCompile Include="src\AAM_MovieAVI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\VJFaceDetect.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -77,10 +77,13 @@
     <ClInclude Include="src\AAM_Util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\AAM_VJFaceDetect.h">
+    <ClInclude Include="src\FacePredict.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\FacePredict.h">
+    <ClInclude Include="src\AAM_MovieAVI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\VJfacedetect.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

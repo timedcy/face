@@ -1,20 +1,19 @@
 /****************************************************************************
-* 
-* Copyright (c) 2008 by Yao Wei, all rights reserved.
-*
-* Author:      	Yao Wei
-* Contact:     	njustyw@gmail.com
-* 
-* This software is partly based on the following open source: 
-*  
-*		- OpenCV 
-* 
+*						AAMLibrary
+*			http://code.google.com/p/aam-library
+* Copyright (c) 2008-2009 by GreatYao, all rights reserved.
 ****************************************************************************/
 
 #ifndef AAM_SHAPE_H
 #define AAM_SHAPE_H
 
-#include "AAM_Util.h"
+#include <vector>
+#include <string>
+#include <iostream>
+#include <fstream>
+
+#include "cv.h"
+#include "highgui.h"
 
 class AAM_Shape
 {
@@ -37,31 +36,19 @@ public:
     // operators
     AAM_Shape&    operator=(const AAM_Shape &s);
     AAM_Shape&    operator=(double value);
-    AAM_Shape     operator+(const AAM_Shape &s);
+    AAM_Shape     operator+(const AAM_Shape &s)const;
     AAM_Shape&    operator+=(const AAM_Shape &s);
-    AAM_Shape     operator-(const AAM_Shape &s);
+    AAM_Shape     operator-(const AAM_Shape &s)const;
     AAM_Shape&    operator-=(const AAM_Shape &s);
-    AAM_Shape     operator*(double value);
+    AAM_Shape     operator*(double value)const;
     AAM_Shape&    operator*=(double value);
-    double         operator*(const AAM_Shape &s);
-    AAM_Shape     operator/(double value);
+    double        operator*(const AAM_Shape &s)const;
+    AAM_Shape     operator/(double value)const;
     AAM_Shape&    operator/=(double value);
-	bool		   operator==(double value);
+	bool		  operator==(double value);
 
     void    clear(){ resize(0); }
     void    resize(int length){ m_vPoint.resize(length); }
-    
-	void print()const
-	{
-		int i, size = NPoints();
-		for(i = 0 ; i < size; i++)
-			printf("%3.1f ", m_vPoint[i].x);
-		printf("\n");
-
-		for(i = 0 ; i < size; i++)
-			printf("%3.1f ", m_vPoint[i].y);
-		printf("\n");
-	}
 	
 	void	Read(std::ifstream& is);
 	void	Write(std::ofstream& os);
@@ -104,7 +91,6 @@ public:
 	// conversion between CvMat and AAM_Shape
 	void    Mat2Point(const CvMat* res);
 	void    Point2Mat(CvMat* res)const;
-
 	void	Sketch(IplImage* image);
 
 private:

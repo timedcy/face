@@ -1,33 +1,29 @@
-﻿Build started 6/17/2014 9:39:47 PM.
+﻿Build started 6/19/2014 10:54:29 AM.
      1>Project "C:\Users\wuxf\documents\visual studio 2012\Projects\face\face\face.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
          C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /IC:\opencv\sources\include\opencv2 /IC:\opencv\sources\include\opencv /IC:\opencv\sources\include /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D _CRT_SECURE_NO_WARNINGS /D _MBCS /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TP /wd4996 /analyze- /errorReport:prompt src\fit.cpp
          fit.cpp
-     1>c:\opencv\build\include\opencv2\flann\result_set.h(306): warning C4003: not enough actual parameters for macro 'max'
-     1>c:\opencv\build\include\opencv2\flann\result_set.h(428): warning C4003: not enough actual parameters for macro 'max'
-     1>c:\opencv\build\include\opencv2\flann\lsh_index.h(203): warning C4003: not enough actual parameters for macro 'max'
-     1>c:\opencv\build\include\opencv2\flann\lsh_index.h(269): warning C4003: not enough actual parameters for macro 'max'
-     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(104): warning C4244: 'argument' : conversion from 'const double' to 'int', possible loss of data
-     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(110): warning C4244: '=' : conversion from 'const double' to 'int', possible loss of data
-     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(111): warning C4244: '=' : conversion from 'const double' to 'int', possible loss of data
-     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(128): warning C4244: '=' : conversion from 'const double' to 'float', possible loss of data
-     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(129): warning C4244: '=' : conversion from 'const double' to 'float', possible loss of data
+     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(106): warning C4244: 'argument' : conversion from 'const double' to 'int', possible loss of data
+     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(112): warning C4244: '=' : conversion from 'const double' to 'int', possible loss of data
+     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(113): warning C4244: '=' : conversion from 'const double' to 'int', possible loss of data
+     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(131): warning C4244: '=' : conversion from 'const double' to 'float', possible loss of data
+     1>c:\users\wuxf\documents\visual studio 2012\projects\face\face\src\fit.cpp(132): warning C4244: '=' : conversion from 'const double' to 'float', possible loss of data
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\wuxf\documents\visual studio 2012\Projects\face\Debug\face.exe" /INCREMENTAL /NOLOGO /LIBPATH:C:\opencv\build\x86\vc11\lib opencv_calib3d248d.lib opencv_contrib248d.lib opencv_core248d.lib opencv_features2d248d.lib opencv_flann248d.lib opencv_gpu248d.lib opencv_highgui248d.lib opencv_imgproc248d.lib opencv_legacy248d.lib opencv_ml248d.lib opencv_nonfree248d.lib opencv_objdetect248d.lib opencv_ocl248d.lib opencv_photo248d.lib opencv_stitching248d.lib opencv_superres248d.lib opencv_ts248d.lib opencv_video248d.lib opencv_videostab248d.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\wuxf\documents\visual studio 2012\Projects\face\Debug\face.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\wuxf\documents\visual studio 2012\Projects\face\Debug\face.lib" /MACHINE:X86 Debug\AAM_Basic.obj
          Debug\AAM_CAM.obj
          Debug\AAM_IC.obj
+         Debug\AAM_MovieAVI.obj
          Debug\AAM_PAW.obj
          Debug\AAM_PDM.obj
          Debug\AAM_Shape.obj
          Debug\AAM_TDM.obj
          Debug\AAM_Util.obj
-         Debug\AAM_VJFaceDetect.obj
          Debug\FacePredict.obj
          Debug\fit.obj
-         Debug\train.obj
+         Debug\VJFaceDetect.obj
          face.vcxproj -> C:\Users\wuxf\documents\visual studio 2012\Projects\face\Debug\face.exe
      1>Done Building Project "C:\Users\wuxf\documents\visual studio 2012\Projects\face\face\face.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:02.69
+Time Elapsed 00:00:02.40

@@ -12,7 +12,16 @@
 //****************************************************************************/
 
 #include "FacePredict.h"
+#define WIN32
+#ifdef WIN32
+#include <io.h>
 #include <direct.h>
+#else
+#include <sys/stat.h>
+#include <stdio.h>
+#include <unistd.h>
+#define _mkdir(a) mkdir(a, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#endif
 
 
 #define free2dvector(vec)										\
@@ -64,7 +73,7 @@ void FacePredict::Train(const std::vector<AAM_Shape> &AllShapes,
 	__shape.Train(AllShapes, AllAlignedShapes, 0.95);
 	Points = cvCreateMat (1, __shape.nPoints(), CV_32FC2);
 	Storage = cvCreateMemStorage(0);
-	__paw.Train(__shape.GetAAMReferenceShape(), Points, Storage);
+	__paw.Train(__shape.GetMeanShape(), Points, Storage);
 
 	int nSamples = AllShapes.size();
 	int nPointsby2 = __shape.nPoints() * 2;

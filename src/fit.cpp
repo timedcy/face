@@ -13,16 +13,16 @@
 
 #include <cstdio>
 #include <string>
-#include <highgui.h>
+#include <opencv/highgui.h>
 
 #include "AAM_IC.h"
-#include "AAM_basic.h"
-#include "AAM_VJFaceDetect.h"
+#include "AAM_Basic.h"
+#include "VJfacedetect.h"
 #include "FacePredict.h"
 
 using namespace std;
 
-static std::string resultDir = "trainingSets/tmp/";
+static std::string resultDir = "./trainingSets/tmp/";
 //std::string resultDir = "../test2/";
 
 static void usage()
@@ -53,20 +53,19 @@ char* faceAging(string imgPath, int curAgeG, int newAgeG)
 	IplImage * image = cvCreateImage(cvGetSize(originalImage), originalImage->depth, originalImage->nChannels);
 	cvCopy(originalImage, image);
 	AAM_Shape Shape;
-	AAM_Shape ShapeF;
-	AAM_Shape ShapeM;
 
 
 	//search shape by aam
 	AAM * aam = NULL;
 	int type;
-	char tmpChar[2];
+	char tmpChar[8];
 
-	itoa(curAgeG, tmpChar, 10);
+	sprintf(tmpChar, "%d", curAgeG);
 	std::string aamFileName = resultDir + "Group" + std::string(tmpChar) + ".aam_ic";
-	std::ifstream fs(aamFileName);
+	printf("%s", aamFileName.c_str());
+	std::ifstream fs(aamFileName.c_str());
 	if(fs == 0) {
-		fprintf(stderr, "ERROR(%s: %d): Cannot open file %s!\n", __FILE__, __LINE__, resultDir+"Group"+ "_x.aam_ic");
+		fprintf(stderr, "ERROR: Cannot open file aam_ic!\n");
 		exit(0);
 	}
 	fs >> type;
@@ -80,7 +79,7 @@ char* faceAging(string imgPath, int curAgeG, int newAgeG)
 	fs.close();
 
 	//intial face detector
-	AAM_VJFaceDetect fjdetect;
+	VJfacedetect fjdetect;
 	fjdetect.LoadCascade("haarcascade_frontalface_alt2.xml");
 
 	//detect face for intialization
@@ -90,14 +89,17 @@ char* faceAging(string imgPath, int curAgeG, int newAgeG)
 	aam->Fit(image, Shape, 30, false);  //if true, show process
 
 	ofstream outfile;
-	outfile.open( resultDir + "aam_result.txt" );
+	string fileName = resultDir + "aam_result.txt";
+	outfile.open(fileName.c_str());
 	Shape.Write( outfile );
 	outfile.close();
+	
 
 	//show GUI
 	cvNamedWindow("AAMFitting");
-	aam->Draw(image, 0);
+	aam->Draw(image, Shape, 2);
 	cvShowImage("AAMFitting", image);
+
 	
 
 	//resize the current image
@@ -114,6 +116,7 @@ char* faceAging(string imgPath, int curAgeG, int newAgeG)
 
 	cvNamedWindow("CurrentFacialImage");
 	cvShowImage("CurrentFacialImage", stdImage);
+
 
 	//draw the shape
 	CvSize ssize;
@@ -136,7 +139,7 @@ char* faceAging(string imgPath, int curAgeG, int newAgeG)
 	//Facial Prediction
 	FacePredict face_predict;
 	std::string mfile = resultDir + "facial.predict_model";
-	std::ifstream model(mfile);
+	std::ifstream model(mfile.c_str());
 	face_predict.Read(model);
 	model.close();
 	//predict(const AAM_Shape& shape, const IplImage& curImage, int curAgeG, int newAgeG, bool save)

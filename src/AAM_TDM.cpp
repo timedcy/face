@@ -1,29 +1,33 @@
 /****************************************************************************
-* 
-* Copyright (c) 2008 by Yao Wei, all rights reserved.
-*
-* Author:      	Yao Wei
-* Contact:     	njustyw@gmail.com
-* 
-* This software is partly based on the following open source: 
-*  
-*		- OpenCV 
-* 
+*						AAMLibrary
+*			http://code.google.com/p/aam-library
+* Copyright (c) 2008-2009 by GreatYao, all rights reserved.
 ****************************************************************************/
 
 #include "AAM_TDM.h"
 #include "AAM_PAW.h"
+#ifdef WIN32
 #include <direct.h>
 #include <io.h>
+#else
+#include <sys/stat.h>
+#include <stdio.h>
+#include <unistd.h>
+#define _mkdir(a) mkdir(a, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#endif
 
 
+
+//============================================================================
 AAM_TDM::AAM_TDM()
 {
 	__MeanTexture = 0;
 	__TextureEigenVectors = 0;
     __TextureEigenValues = 0; 
+
 }
 
+//============================================================================
 AAM_TDM::~AAM_TDM()
 {
 	cvReleaseMat(&__MeanTexture);
@@ -32,48 +36,44 @@ AAM_TDM::~AAM_TDM()
 }
 
 //============================================================================
-void AAM_TDM::Train(const std::vector<AAM_Shape> &AllShapes, 
-					const AAM_PAW& m_warp,
-					const std::vector<IplImage*> &AllImages,
-					double percentage,
-					bool registration)
+void AAM_TDM::Train(const file_lists& pts_files, const file_lists& img_files, 
+					const AAM_PAW& m_warp, 
+					double texture_percentage /* = 0.975 */, 
+					bool registration /* = true */)
 {
-	if(AllShapes.size() != AllImages.size())
-	{
-		fprintf(stderr, "ERROR(%s, %d): #Shapes != #Images\n",
-			__FILE__, __LINE__);
-		exit(0);
-	}
-
-	printf("################################################\n");
-	printf("Build Texture Distribution Model...\n");
-
 	int nPoints = m_warp.nPoints();
 	int nPixels = m_warp.nPix()*3;
-	int nSamples = AllShapes.size();
+	int nSamples = pts_files.size();
 	
 	CvMat *AllTextures = cvCreateMat(nSamples, nPixels, CV_64FC1);
 	
-	printf("Calclating texture vectors...\n");
+	CvMat * matshape = cvCreateMat(1, nPoints*2, CV_64FC1);
 	for(int i = 0; i < nSamples; i++)
 	{
-		CvMat oneTexture;
-		cvGetRow(AllTextures, &oneTexture, i);
-		m_warp.FasterGetWarpTextureFromShape(AllShapes[i], AllImages[i],
-			&oneTexture, true);
-	}	
+		IplImage* image = cvLoadImage(img_files[i].c_str(), -1);
+		
+		AAM_Shape trueshape;
+		if(!trueshape.ReadAnnotations(pts_files[i]))
+			trueshape.ScaleXY(image->width, image->height);
+		trueshape.Point2Mat(matshape);
+		AAM_Common::CheckShape(matshape, image->width, image->height);
+		
+		CvMat t;	cvGetRow(AllTextures, &t, i);
+		m_warp.CalcWarpTexture(matshape, image, &t);
+		
+		cvReleaseImage(&image);
+	}
+	cvReleaseMat(&matshape);
 	
 	// align texture so as to minimize the lighting variation
-	printf("Align textures to minimize the lighting variation ...\n");
 	AAM_TDM::AlignTextures(AllTextures);
 	
 	//now do pca
-	DoPCA(AllTextures, percentage);
+	DoPCA(AllTextures, texture_percentage);
 
 	if(registration) SaveSeriesTemplate(AllTextures, m_warp);
-	
+
 	cvReleaseMat(&AllTextures);
-	printf("################################################\n\n");	
 }
 
 //additonal, overloading function
@@ -134,6 +134,7 @@ void AAM_TDM::DoPCA(const CvMat* AllTextures, double percentage)
 
     cvCalcPCA(AllTextures, __MeanTexture, 
         tmpEigenValues, tmpEigenVectors, CV_PCA_DATA_AS_ROW);
+
 	double allSum = cvSum(tmpEigenValues).val[0];
 	double partSum = 0.0;
     int nTruncated = 0;
@@ -164,17 +165,18 @@ void AAM_TDM::DoPCA(const CvMat* AllTextures, double percentage)
 }
 
 //============================================================================
-void AAM_TDM::CalcTexture(const CvMat* lamda, CvMat* texture)
+void AAM_TDM::CalcTexture(const CvMat* lamda, CvMat* t)
 {
-	cvBackProjectPCA(lamda, __MeanTexture, __TextureEigenVectors, texture);  //texture, the inverse-projected result
+	cvBackProjectPCA(lamda, __MeanTexture, __TextureEigenVectors, t);
 }
 
 //============================================================================
-void AAM_TDM::CalcParams(const CvMat* texture, CvMat* lamda)
+void AAM_TDM::CalcParams(const CvMat* t, CvMat* lamda)
 {
-	cvProjectPCA(texture, __MeanTexture, __TextureEigenVectors, lamda);  //lamda, the projected result
+	cvProjectPCA(t, __MeanTexture, __TextureEigenVectors, lamda);
 }
 
+//============================================================================
 void AAM_TDM::Clamp(CvMat* lamda, double s_d /* = 3.0 */)
 {
 	double* fastp = lamda->data.db;
@@ -193,51 +195,46 @@ void AAM_TDM::Clamp(CvMat* lamda, double s_d /* = 3.0 */)
 //============================================================================
 void AAM_TDM::AlignTextures(CvMat* AllTextures)
 {
+	printf("Align textures to minimize the lighting variation ...\n");
+	
 	int nsamples = AllTextures->rows;
 	int npixels = AllTextures->cols;
 	CvMat* meanTexture = cvCreateMat(1, npixels, CV_64FC1);
-	CvMat* newmeanTexture = cvCreateMat(1, npixels, CV_64FC1);
-	CvMat* refTexture = cvCreateMat(1, npixels, CV_64FC1);
+	CvMat* lastMeanEstimate = cvCreateMat(1, npixels, CV_64FC1);
+	CvMat* constmeanTexture = cvCreateMat(1, npixels, CV_64FC1);
 	CvMat ti;
 
 	// calculate the mean texture 
 	AAM_TDM::CalcMeanTexture(AllTextures, meanTexture);
 	AAM_TDM::ZeroMeanUnitLength(meanTexture);
-	//cvNormalize(meanTexture, meanTexture);
-	
-	// We choose an initial estimate 
-	cvCopy(meanTexture, refTexture);
-
+	cvCopy(meanTexture, constmeanTexture);
+		
 	// do a number of alignment iterations until convergence
-    double diff, diff_max = 0.001;
-	const int max_iter = 30;
+    double diff, diff_max = 1e-6;
+	const int max_iter = 15;
 	for(int iter = 0; iter < max_iter; iter++)
 	{
+		cvCopy(meanTexture, lastMeanEstimate);
 		//align all textures to the mean texture estimate
 		for(int i = 0; i < nsamples; i++)
 		{
 			cvGetRow(AllTextures, &ti, i);
-			AAM_TDM::AlignTextureToRef(refTexture, &ti);
+			AAM_TDM::NormalizeTexture(meanTexture, &ti);
 		}
 
 		//estimate new mean texture
-		AAM_TDM::CalcMeanTexture(AllTextures, newmeanTexture);
-		AAM_TDM::ZeroMeanUnitLength(newmeanTexture);
-		//cvNormalize(newmeanTexture, newmeanTexture); 
-
-		diff = cvNorm(refTexture, newmeanTexture, CV_RELATIVE_L2);
+		AAM_TDM::CalcMeanTexture(AllTextures, meanTexture);
+		AAM_TDM::NormalizeTexture(constmeanTexture, meanTexture);
 		
-		printf("Alignment iteration #%i, mean texture est. diff. = %g\n", iter, diff );
-        
-		if(diff <= diff_max) break; //converged
-	
-		//if not converged, come on iterations
-		cvCopy(newmeanTexture, refTexture);
+		// test if the mean estimate has converged
+		diff = cvNorm(meanTexture, lastMeanEstimate);
+		printf("\tAlignment iteration #%i, mean texture est. diff. = %g\n", iter, diff );
+		if(diff <= diff_max) break;		
 	}  
 
 	cvReleaseMat(&meanTexture);
-	cvReleaseMat(&newmeanTexture);
-	cvReleaseMat(&refTexture);
+	cvReleaseMat(&lastMeanEstimate);
+	cvReleaseMat(&constmeanTexture);
 }
 
 //============================================================================
@@ -249,6 +246,15 @@ void AAM_TDM::CalcMeanTexture(const CvMat* AllTextures, CvMat* meanTexture)
 		cvGetCol(AllTextures, &submat, i);
 		cvmSet(meanTexture, 0, i, cvAvg(&submat).val[0]);
 	}
+}
+
+
+//============================================================================
+void AAM_TDM::NormalizeTexture(const CvMat* refTextrure, CvMat* Texture)
+{
+	AAM_TDM::ZeroMeanUnitLength(Texture);
+	double alpha = cvDotProduct(Texture, refTextrure);
+	if(alpha != 0)	cvConvertScale(Texture, Texture, 1.0/alpha, 0);
 }
 
 //============================================================================
@@ -274,18 +280,19 @@ void AAM_TDM::ZeroMeanUnitLength(CvMat* Texture)
 //============================================================================
 void AAM_TDM::SaveSeriesTemplate(const CvMat* AllTextures, const AAM_PAW& m_warp)
 {
-	printf("Saving the face template image...");
-	if(access("registration", 0))	mkdir("registration");
-	if(access("Modes", 0))	mkdir("Modes");
-	if(access("Tri", 0))	mkdir("Tri");
+	printf("Saving the face template image...\n");
+	if(access("registration", 0))	_mkdir("registration");
+	if(access("Modes", 0))	_mkdir("Modes");
+	if(access("Tri", 0))	_mkdir("Tri");
 	char filename[100];
 	
-	for(int i = 0; i < AllTextures->rows; i++)
+	int i;
+	for(i = 0; i < AllTextures->rows; i++)
 	{
 		CvMat oneTexture;
 		cvGetRow(AllTextures, &oneTexture, i);
-		sprintf(filename, "registration/%03i.jpg", i);
-		m_warp.SaveWarpImageFromVector(filename, &oneTexture);
+		sprintf(filename, "registration/%i.jpg", i);
+		m_warp.SaveWarpTextureToImage(filename, &oneTexture);
 	}
 	
 	for(int nmodes = 0; nmodes < nModes(); nmodes++)
@@ -294,7 +301,7 @@ void AAM_TDM::SaveSeriesTemplate(const CvMat* AllTextures, const AAM_PAW& m_warp
 		cvGetRow(__TextureEigenVectors, &oneVar, nmodes);
 	
 		sprintf(filename, "Modes/A%03i.jpg", nmodes+1);
-		m_warp.SaveWarpImageFromVector(filename, &oneVar);
+		m_warp.SaveWarpTextureToImage(filename, &oneVar);
 	}
 	
 	IplImage* templateimg = cvCreateImage
@@ -304,13 +311,11 @@ void AAM_TDM::SaveSeriesTemplate(const CvMat* AllTextures, const AAM_PAW& m_warp
 	IplImage* TriImage = cvCreateImage
 		(cvSize(m_warp.Width(), m_warp.Height()), IPL_DEPTH_8U, 3);
 
-	m_warp.GetWarpImageFromVector(templateimg, __MeanTexture);
-	cvSaveImage("Modes/Template.jpg", templateimg);
-	m_warp.SaveWarpImageFromVector("Modes/A00.jpg", __MeanTexture);
+	m_warp.SaveWarpTextureToImage("Modes/Template.jpg", __MeanTexture);
+	m_warp.TextureToImage(templateimg, __MeanTexture);
 
-	cvZero(convexImage);
-
-	for( int i = 0; i < m_warp.nTri(); i++)
+	cvSetZero(convexImage);
+	for(i = 0; i < m_warp.nTri(); i++)
 	{
 		CvPoint p, q;
 		int ind1, ind2;
@@ -335,7 +340,7 @@ void AAM_TDM::SaveSeriesTemplate(const CvMat* AllTextures, const AAM_PAW& m_warp
 		cvLine(TriImage, p, q, CV_RGB(255, 255, 255));
 		cvLine(convexImage, p, q, CV_RGB(255, 255, 255));
 
-		sprintf(filename, "Tri/%03i.jpg", i);
+		sprintf(filename, "Tri/%03i.jpg", i+1);
 		cvSaveImage(filename, TriImage);
 	}
 	cvSaveImage("Tri/convex.jpg", convexImage);
@@ -343,7 +348,6 @@ void AAM_TDM::SaveSeriesTemplate(const CvMat* AllTextures, const AAM_PAW& m_warp
 	cvReleaseImage(&templateimg);
 	cvReleaseImage(&convexImage);
 	cvReleaseImage(&TriImage);
-	printf("Done\n");
 }
 
 //============================================================================

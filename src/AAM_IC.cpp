@@ -1,30 +1,25 @@
 /****************************************************************************
-* 
-* Copyright (c) 2008 by Yao Wei, all rights reserved.
-*
-* Author:      	Yao Wei
-* Contact:     	njustyw@gmail.com
-* 
-* This software is partly based on the following open source: 
-*  
-*		- OpenCV 
-* 
+*						AAMLibrary
+*			http://code.google.com/p/aam-library
+* Copyright (c) 2008-2009 by GreatYao, all rights reserved.
 ****************************************************************************/
-
+#define WIN32
+#ifdef WIN32
 #include <direct.h>
+#else
+#include <sys/stat.h>
+#define _mkdir(a) mkdir(a, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#endif
 #include "AAM_IC.h"
 
-#define MAG(x, y) sqrt((x)*(x)+(y)*(y))
 
-static int gi = 0;
-
+//============================================================================
 AAM_IC::AAM_IC()
 {
 	__Points = 0;
 	__Storage = 0;
 
 	__update_s0 = 0;
-	__delta_s = 0;
 	__warp_t = 0;
 	__error_t = 0;
 	__search_pq = 0;
@@ -33,13 +28,13 @@ AAM_IC::AAM_IC()
 	__update_s = 0;
 }
 
+//============================================================================
 AAM_IC::~AAM_IC()
 {
 	cvReleaseMat(&__Points);
 	cvReleaseMemStorage(&__Storage);
 
 	cvReleaseMat(&__update_s0);
-	cvReleaseMat(&__delta_s);
 	cvReleaseMat(&__warp_t);
 	cvReleaseMat(&__error_t);
 	cvReleaseMat(&__search_pq);
@@ -77,16 +72,14 @@ CvMat* AAM_IC::CalcGradIdx()
 //============================================================================
 void AAM_IC::CalcTexGrad(const CvMat* texture, CvMat* dTx, CvMat* dTy)
 {
-	printf("Calculating texture gradient...");
-	
 	double* _x = dTx->data.db;
 	double* _y = dTy->data.db;
 	double* t = texture->data.db;
-	CvMat *p = CalcGradIdx();
+	CvMat *idx = CalcGradIdx();
 
 	for(int i = 0; i < __paw.nPix(); i++)
 	{
-		int *fastp = (int*)(p->data.ptr + p->step*i);
+		int *fastp = (int*)(idx->data.ptr + idx->step*i);
 				
 		// x direction
 		if(fastp[0] >= 0 && fastp[1] >= 0)
@@ -145,15 +138,12 @@ void AAM_IC::CalcTexGrad(const CvMat* texture, CvMat* dTx, CvMat* dTy)
 			_y[3*i+2] = 0;
 		}
 	}
-	cvReleaseMat(&p);
-	printf("Done\n");
+	cvReleaseMat(&idx);
 }
 
 //============================================================================
 void AAM_IC::CalcWarpJacobian(CvMat* Jx, CvMat* Jy)
 {
-	printf("Calculating warp Jacobian...");
-	
 	int nPoints = __shape.nPoints();
 	__sMean.Mat2Point(__shape.GetMean());
 	__sStar1.resize(nPoints); __sStar2.resize(nPoints);
@@ -209,16 +199,12 @@ void AAM_IC::CalcWarpJacobian(CvMat* Jx, CvMat* Jy)
 				__paw.Belta(i)*cvmGet(B,j,2*v2+1) + __paw.Gamma(i)*cvmGet(B,j,2*v3+1);	
 		}
 	}
-
-	printf("Done\n");
 }
 
 //============================================================================
 void AAM_IC::CalcModifiedSD(CvMat* SD, const CvMat* dTx, const CvMat* dTy, 
 							const CvMat* Jx, const CvMat* Jy)
 {
-	printf("Calculating steepest descent images...");
-
 	int i, j;
 	
 	//create steepest descent images
@@ -240,10 +226,11 @@ void AAM_IC::CalcModifiedSD(CvMat* SD, const CvMat* dTx, const CvMat* dTy,
 		}
 	}
 
-	//project out appearance variation i.e. modify the steepest descent image
+	//project out appearance variation (and linear lighting parameters)
 	const CvMat* B = __texture.GetBases();
 	CvMat* V = cvCreateMat(4+__shape.nModes(), __texture.nModes(), CV_64FC1);
 	CvMat SDMat, BMat;
+	
 	cvGEMM(SD, B, 1., NULL, 1., V, CV_GEMM_B_T);
 	// Equation (63),(64)
 	for(i = 0; i < __shape.nModes()+4; i++)
@@ -256,72 +243,92 @@ void AAM_IC::CalcModifiedSD(CvMat* SD, const CvMat* dTx, const CvMat* dTy,
 		}
 	}
 
-	printf("Done\n");
+	cvReleaseMat(&V);
 }
 
 //============================================================================
 void AAM_IC::CalcHessian(CvMat* H, const CvMat* SD)
 {
-	printf("Calculating Hessian inverse matrix...");
-
 	CvMat* HH = cvCreateMat(H->rows, H->cols, CV_64FC1);
 	cvMulTransposed(SD, HH, 0);// Equation (65)
 	cvInvert(HH, H, CV_SVD);
 	cvReleaseMat(&HH);
-	
-	printf("Done\n");
 }
 
 //============================================================================
-void AAM_IC::Train(const std::vector<AAM_Shape>& AllShapes, const std::vector<IplImage*>& AllImages, 
-				   double shape_percentage /* = 0.95 */, double texture_percentage /* = 0.95 */)
+void AAM_IC::Train(const file_lists& pts_files, 
+				   const file_lists& img_files, 
+				   double scale /* = 1.0 */, 
+				   double shape_percentage /* = 0.975 */, 
+				   double texture_percentage /* = 0.975 */)
 {
-	if(AllShapes.size() != AllImages.size())
+	if(pts_files.size() != img_files.size())
 	{
 		fprintf(stderr, "ERROE(%s, %d): #Shapes != #Images\n",
 			__FILE__, __LINE__);
 		exit(0);
 	}
 
-	//building shape and texture distribution model
-	__shape.Train(AllShapes, shape_percentage);
-	__Points = cvCreateMat (1, __shape.nPoints(), CV_32FC2);
-	__Storage = cvCreateMemStorage(0);
-	__paw.Train(__shape.GetAAMReferenceShape(), __Points, __Storage);
-	__texture.Train(AllShapes, __paw, AllImages, texture_percentage, false);  //if true, save the image to file
-
 	printf("################################################\n");
 	printf("Build Inverse Compositional Image Alignmennt Model...\n");
 
+	std::vector<AAM_Shape> AllShapes;
+	for(int ii = 0; ii < pts_files.size(); ii++)
+	{
+		AAM_Shape Shape;
+		bool flag = Shape.ReadAnnotations(pts_files[ii]);
+		if(!flag)
+		{
+			IplImage* image = cvLoadImage(img_files[ii].c_str(), -1);
+			Shape.ScaleXY(image->width, image->height);
+			cvReleaseImage(&image);
+		}
+		AllShapes.push_back(Shape);
+	}
+
+	//building shape and texture distribution model
+	printf("Build point distribution model...\n");
+	__shape.Train(AllShapes, scale, shape_percentage);
+	
+	printf("Build warp information of mean shape mesh...");
+	__Points = cvCreateMat (1, __shape.nPoints(), CV_32FC2);
+	__Storage = cvCreateMemStorage(0);
+
+	double sp = 1.0;
+	//if(__shape.GetMeanShape().GetWidth() > 48)
+	//	sp = 48/__shape.GetMeanShape().GetWidth();
+
+	__paw.Train(__shape.GetMeanShape()*sp, __Points, __Storage);
+	printf("[%d by %d, triangles #%d, pixels #%d*3]\n",
+		__paw.Width(), __paw.Height(), __paw.nTri(), __paw.nPix());
+
+	printf("Build texture distribution model...\n");
+	__texture.Train(pts_files, img_files, __paw, texture_percentage, true);
+
 	//calculate gradient of texture
+	printf("Calculating texture gradient...\n");
 	CvMat* dTx = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
 	CvMat* dTy = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
 	CalcTexGrad(__texture.GetMean(), dTx, dTy);
-	// save gradient image
-	mkdir("Modes");
-	__paw.SaveWarpImageFromVector("Modes/dTx.jpg", dTx);
-	__paw.SaveWarpImageFromVector("Modes/dTy.jpg", dTy);
 	
-	//draw the mean face
-	char gid[10];
-	itoa(gi, gid,10);
-	std::string name = std::string(gid);
-	std::string resultDir = "./test/";
-	//std::string resultDir = "../test2/";
-	std::string dir = resultDir + "meanFace/meanG" + name  + ".jpg";
-	__paw.SaveWarpImageFromVector(dir.c_str(), __texture.GetMean());
-	gi++;
+	// save gradient image
+	_mkdir("Modes");
+	__paw.SaveWarpTextureToImage("Modes/dTx.jpg", dTx);
+	__paw.SaveWarpTextureToImage("Modes/dTy.jpg", dTy);
 	
 	//calculate warp Jacobian at base shape
+	printf("Calculating warp Jacobian...\n");
 	CvMat* Jx = cvCreateMat(__paw.nPix(), __shape.nModes()+4, CV_64FC1);
 	CvMat* Jy = cvCreateMat(__paw.nPix(), __shape.nModes()+4, CV_64FC1);
 	CalcWarpJacobian(Jx,Jy);
 	
 	//calculate modified steepest descent image
+	printf("Calculating steepest descent images...\n");
 	CvMat* SD = cvCreateMat(__shape.nModes()+4, __texture.nPixels(), CV_64FC1);
 	CalcModifiedSD(SD, dTx, dTy, Jx, Jy);
 
 	//calculate inverse Hessian matrix
+	printf("Calculating Hessian inverse matrix...\n");
 	CvMat* H = cvCreateMat(__shape.nModes()+4, __shape.nModes()+4, CV_64FC1);
 	CalcHessian(H, SD);
 
@@ -339,7 +346,6 @@ void AAM_IC::Train(const std::vector<AAM_Shape>& AllShapes, const std::vector<Ip
 
 	//alocate memory for on-line fitting stuff
 	__update_s0 = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
-	__delta_s = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
 	__inv_pq = cvCreateMat(1, __shape.nModes()+4, CV_64FC1);
 	__warp_t = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
 	__error_t = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
@@ -353,69 +359,50 @@ void AAM_IC::Train(const std::vector<AAM_Shape>& AllShapes, const std::vector<Ip
 }
 
 //============================================================================
-int AAM_IC::Fit(const IplImage* image, 		AAM_Shape& Shape, 
+void AAM_IC::Fit(const IplImage* image, 		AAM_Shape& Shape, 
 				int max_iter /* = 30 */, 	bool showprocess /* = false */)
 {
 	//initialize some stuff
-	double t = (double)cvGetTickCount();
-	CvMat p; cvGetCols(__search_pq, &p, 4, 4+__shape.nModes());
-	double e1(1e100), e2;
-	Shape.Point2Mat(__current_s);
+	double t = gettime;
 	const CvMat* A0 = __texture.GetMean();
+	CvMat p; cvGetCols(__search_pq, &p, 4, 4+__shape.nModes());
+	Shape.Point2Mat(__current_s);
 	SetAllParamsZero();
 	__shape.CalcParams(__current_s, __search_pq);
-
 	IplImage* Drawimg = 0;
-	char filename[100];
 	
-	if(showprocess){	
-		Drawimg = cvCreateImage(cvGetSize(image), image->depth, image->nChannels);	
-		mkdir("result");
-		cvCopy(image, Drawimg);
-		Draw(Drawimg, 2);
-		sprintf(filename, "result/Init.jpg");
-		cvSaveImage(filename, Drawimg);
-	}
-
-	int iter;
-
-	for( iter = 0; iter < max_iter; iter++)
+	for(int iter = 0; iter < max_iter; iter++)
 	{
-		printf("%d ", iter);
-		//check the current shape
-		if(!AAM_IC::IsShapeWithinImage(__current_s, image->width, image->height)){
-			fprintf(stderr, "ERROR(%s, %d): Shape out of image\n",
-				__FILE__, __LINE__);
-			return iter;
+		if(showprocess)
+		{	
+			if(Drawimg == 0)	Drawimg = cvCloneImage(image);	
+			else cvCopy(image, Drawimg);
+			Shape.Mat2Point(__current_s);
+			Draw(Drawimg, Shape, 2);
+			_mkdir("result");
+			char filename[100];
+			sprintf(filename, "result/Iter-%02d.jpg", iter);
+			cvSaveImage(filename, Drawimg);
+			
 		}
 		
-		//warp image to template image A0
-		__paw.FasterGetWarpTextureFromMatShape(__current_s, image, __warp_t, true);
-		AAM_TDM::AlignTextureToRef(A0, __warp_t);
+		//check the current shape
+		AAM_Common::CheckShape(__current_s, image->width, image->height);
 		
-		//calculate error image
+		//warp image to mesh shape mesh
+		__paw.CalcWarpTexture(__current_s, image, __warp_t);
+		AAM_TDM::NormalizeTexture(A0, __warp_t);
 		cvSub(__warp_t, A0, __error_t);
 		
-		if(showprocess){
-			cvCopy(image, Drawimg);
-			Draw(Drawimg, 2);
-			sprintf(filename, "result/Iter-%02d.jpg", iter+1);
-			cvSaveImage(filename, Drawimg);
-		}
-
-		//check for texture divergence
-		e2 = cvNorm(__error_t);
-		if(e2 < 0.01 || (iter>max_iter/3&&fabs(e2-e1)<0.01*e1)) break;
-		e1 = e2;
-		
-		//1. calculate dot product of modified steepest descent images 
-		//   with error image
-		//2. calculate delta q and delta p by multiplying by inverse Hessian.
-		//In summary: we calculate parameters update
+		 //calculate updates (and scale to account for linear lighting gain)
 		cvGEMM(__error_t, __G, 1, NULL, 1, __delta_pq, CV_GEMM_B_T);
 		
+		//check for parameter convergence
+		if(cvNorm(__delta_pq) < 1e-6)	break;
+
 		//apply inverse compositional algorithm to update parameters
 		InverseCompose(__delta_pq, __current_s, __update_s);
+		
 		//smooth shape
 		cvAddWeighted(__current_s, 0.4, __update_s, 0.6, 0, __update_s);
 		//update parameters
@@ -424,19 +411,16 @@ int AAM_IC::Fit(const IplImage* image, 		AAM_Shape& Shape,
 		__shape.CalcShape(__search_pq, __update_s);
 		
 		//check for shape convergence
-		cvSub(__current_s, __update_s, __delta_s);
-		if(/*cvNorm(__delta_s)<0.01*/cvNorm(__delta_s, 0, CV_C) < 0.25)	break;
+		if(cvNorm(__current_s, __update_s, CV_L2) < 0.001)	break;
 		else cvCopy(__update_s, __current_s);	
 	}
 
 	Shape.Mat2Point(__current_s);
 		
-	t = ((double)cvGetTickCount()-t)/(cvGetTickFrequency()*1000.);
+	t = gettime-t;
 	printf("AAM IC Fitting time cost %.3f millisec\n", t);
 	
 	cvReleaseImage(&Drawimg);
-	
-	return iter;
 }
 
 //============================================================================
@@ -461,156 +445,59 @@ void AAM_IC::InverseCompose(const CvMat* dpq, const CvMat* s, CvMat* NewS)
 	double *S = s->data.db;
 	double *SEst = NewS->data.db;
 	double x, y, xw, yw;
-	int k;
-	double alpha, belta, gamma;
+	int k, tri_idx;
 	int v1, v2, v3;
+	const std::vector<std::vector<int> >& tri = __paw.__tri;
+	const std::vector<std::vector<int> >& vtri = __paw.__vtri;
+
 	for(int i = 0; i < __shape.nPoints(); i++)
 	{
 		x = 0.0;	y = 0.0;
 		k = 0;
 		//The only problem with this approach is which triangle do we use?
-		//In general there will be several triangles that share the ith vertex.
-		for(int j = 0; j < __paw.nTri(); j++)
+		//In general there will be several triangles that share the i-th vertex.
+		for(k = 0; k < vtri[i].size(); k++)// see Figure (11)
 		{
-			if(__paw.vTri(i, j) > 0)
-			{
-				// see Figure (11)
-				v1 = __paw.Tri(j, 0);
-				v2 = __paw.Tri(j, 1);
-				v3 = __paw.Tri(j, 2);
-				AAM_PAW::CalcWarpParameters(S0[2*i],S0[2*i+1], __sMean[v1].x, __sMean[v1].y,
-					__sMean[v2].x, __sMean[v2].y, __sMean[v3].x, __sMean[v3].y, 
-					alpha, belta, gamma);
-				
-				xw = alpha*S[2*v1] + belta*S[2*v2] + gamma*S[2*v3];
-				yw = alpha*S[2*v1+1] + belta*S[2*v2+1] + gamma*S[2*v3+1];
-				x += xw;		y += yw;
-				k++;
-			}
+			tri_idx = vtri[i][k];
+			v1 = tri[tri_idx][0];
+			v2 = tri[tri_idx][1];
+			v3 = tri[tri_idx][2];
+
+			AAM_PAW::Warp(S0[2*i],S0[2*i+1],
+				__sMean[v1].x, __sMean[v1].y,__sMean[v2].x, __sMean[v2].y,__sMean[v3].x, __sMean[v3].y,
+					xw, yw,	S[2*v1], S[2*v1+1], S[2*v2], S[2*v2+1], S[2*v3], S[2*v3+1]);
+			x += xw;		y += yw;
 		}
 		// average the result so as to smooth the warp at each vertex
 		SEst[2*i] = x/k;		SEst[2*i+1] = y/k;
 	}
 }
 
-//============================================================================
-void AAM_IC::CalcAppearanceVariation(const CvMat* error_t, CvMat* lamda)
-{
-	cvGEMM(error_t, __texture.GetBases(), 1, NULL, 1, lamda, CV_GEMM_B_T);
-}
 
-void AAM_IC::Draw(IplImage* image, int type)
+//============================================================================
+void AAM_IC::Draw(IplImage* image, const AAM_Shape& Shape, int type)
 {
-	if(type == 0) DrawPoint(image);
-	else if(type == 1) DrawTriangle(image);
+	if(type == 0) AAM_Common::DrawPoints(image, Shape);
+	else if(type == 1) AAM_Common::DrawTriangles(image, Shape, __paw.__tri);
 	else if(type == 2) 
 	{
-		CalcAppearanceVariation(__error_t, __lamda);
+		cvGEMM(__error_t, __texture.GetBases(), 1, NULL, 1, __lamda, CV_GEMM_B_T);
 		__texture.CalcTexture(__lamda, __warp_t);
-		DrawAppearance(image);
+		AAM_PAW paw;
+		double minV, maxV;
+		cvMinMaxLoc(__warp_t, &minV, &maxV);
+		cvConvertScale(__warp_t, __warp_t, 255/(maxV-minV), -minV*255/(maxV-minV));
+		paw.Train(Shape, __Points, __Storage, __paw.GetTri(), false);
+		AAM_Common::DrawAppearance(image, Shape, __warp_t, paw, __paw);
 	}
-	else ;
+	else fprintf(stderr, "ERROR(%s, %d): Unsupported drawing type\n",
+		__FILE__, __LINE__);
 }
 
-//============================================================================
-void AAM_IC::DrawPoint(IplImage* image)
-{
-	double* p = __current_s->data.db;
-	for(int i = 0; i < __shape.nPoints(); i++)
-	{
-		cvCircle(image, cvPoint(p[2*i], p[2*i+1]), 1, CV_RGB(0, 255, 0),1);
-	}
-}
-
-//============================================================================
-void AAM_IC::DrawTriangle(IplImage* image)
-{
-	double* p = __current_s->data.db;
-	int idx1, idx2, idx3;
-	for(int i = 0; i < __paw.nTri(); i++)
-	{
-		idx1 = __paw.__tri[i][0]; idx2 = __paw.__tri[i][1]; idx3 = __paw.__tri[i][2];
-		cvLine(image, cvPoint(p[2*idx1], p[2*idx1+1]), cvPoint(p[2*idx2], p[2*idx2+1]),
-			CV_RGB(128,255,0),2);
-		cvLine(image, cvPoint(p[2*idx2], p[2*idx2+1]), cvPoint(p[2*idx3], p[2*idx3+1]),
-			CV_RGB(128,255,0),2);
-		cvLine(image, cvPoint(p[2*idx3], p[2*idx3+1]), cvPoint(p[2*idx1], p[2*idx1+1]),
-			CV_RGB(128,255,0),2);
-	}
-}
-
-//============================================================================
-void AAM_IC::DrawAppearance(IplImage* image)
-{
-	AAM_Shape Shape; Shape.Mat2Point(__current_s);
-	AAM_PAW paw;
-	paw.Train(Shape, __Points, __Storage, __paw.GetTri(), false);
-	int x1, x2, y1, y2, idx1, idx2;
-	int xby3, idxby3;
-	int minx, miny, maxx, maxy;
-	int tri_idx, v1, v2, v3;
-	AAM_Shape refShape = __sMean;
-	refShape.Translate(-refShape.MinX(), -refShape.MinY());
-	double minV, maxV;
-	cvMinMaxLoc(__warp_t, &minV, &maxV);
-	cvConvertScale(__warp_t, __warp_t, 255/(maxV-minV), -minV*255/(maxV-minV));
-	byte* pimg;
-	double* fastt = __warp_t->data.db;
-
-	minx = Shape.MinX(); miny = Shape.MinY();
-	maxx = Shape.MaxX(); maxy = Shape.MaxY();
-	for(int y = miny; y < maxy; y++)
-	{
-		y1 = y-miny;
-		pimg = (byte*)(image->imageData + image->widthStep*y);
-		for(int x = minx; x < maxx; x++)
-		{
-			x1 = x-minx;
-			idx1 = paw.__rect[y1][x1];
-			if(idx1 >= 0)
-			{
-				tri_idx = paw.__pixTri[idx1];
-				v1 = paw.__tri[tri_idx][0];
-				v2 = paw.__tri[tri_idx][1];
-				v3 = paw.__tri[tri_idx][2];
-		
-				x2 = paw.__alpha[idx1]*refShape[v1].x + paw.__belta[idx1]*refShape[v2].x +  
-					paw.__gamma[idx1]*refShape[v3].x;
-				y2 = paw.__alpha[idx1]*refShape[v1].y + paw.__belta[idx1]*refShape[v2].y +  
-					paw.__gamma[idx1]*refShape[v3].y;
-				
-				xby3 = 3*x; 
-				idx2 = __paw.__rect[y2][x2];		idxby3 = 3*idx2;
-				pimg[xby3] = fastt[idxby3];
-				pimg[xby3+1] = fastt[idxby3+1];
-				pimg[xby3+2] = fastt[idxby3+2];
-			}
-		}
-	}
-}
-
-
-//============================================================================
-bool AAM_IC::IsShapeWithinImage(const CvMat* s, int w, int h)
-{
-	double* fasts = s->data.db;
-	int npoints = s->cols / 2;
-
-	for(int i = 0; i < npoints; i++)
-	{
-		if(fasts[2*i] > w-1 || fasts[2*i] < 0)
-			return false;
-		if(fasts[2*i+1] > h-1 || fasts[2*i+1] < 0)
-			return false;
-	}
-	return true;
-}
 
 //============================================================================
 void AAM_IC::Write(std::ofstream& os)
 {
-	printf("Writing the AAM-IC Model to file...");
-	
 	__shape.Write(os);
 	__texture.Write(os);
 	__paw.Write(os);
@@ -620,15 +507,11 @@ void AAM_IC::Write(std::ofstream& os)
 	__sStar3.Write(os); __sStar4.Write(os);
 
 	os << __G << std::endl;
-	
-	printf("Done\n\n");
 }
 
 //============================================================================
 void AAM_IC::Read(std::ifstream& is)
 {
-	printf("Reading the AAM-IC Model from file...");
-
 	__shape.Read(is);
 	__texture.Read(is);
 	__paw.Read(is);
@@ -649,7 +532,6 @@ void AAM_IC::Read(std::ifstream& is)
 	__Storage = cvCreateMemStorage(0);
 
 	__update_s0 = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
-	__delta_s = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
 	__inv_pq = cvCreateMat(1, __shape.nModes()+4, CV_64FC1);
 	__warp_t = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
 	__error_t = cvCreateMat(1, __texture.nPixels(), CV_64FC1);
@@ -658,6 +540,4 @@ void AAM_IC::Read(std::ifstream& is)
 	__current_s = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
 	__update_s = cvCreateMat(1, __shape.nPoints()*2, CV_64FC1);
 	__lamda  = cvCreateMat(1, __texture.nModes(), CV_64FC1);
-
-	printf("Done\n\n");
 }

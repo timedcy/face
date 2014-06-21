@@ -1,14 +1,7 @@
 /****************************************************************************
-* 
-* Copyright (c) 2008 by Yao Wei, all rights reserved.
-*
-* Author:      	Yao Wei
-* Contact:     	njustyw@gmail.com
-* 
-* This software is partly based on the following open source: 
-*  
-*		- OpenCV 
-* 
+*						AAMLibrary
+*			http://code.google.com/p/aam-library
+* Copyright (c) 2008-2009 by GreatYao, all rights reserved.
 ****************************************************************************/
 
 #include <string>
@@ -42,7 +35,7 @@ AAM_Shape& AAM_Shape::operator=(double value)
 	return *this;   
 }
 
-AAM_Shape AAM_Shape::operator+(const AAM_Shape &s)
+AAM_Shape AAM_Shape::operator+(const AAM_Shape &s)const
 {    
 //    return AAM_Shape(*this) += s;
 	
@@ -68,7 +61,7 @@ AAM_Shape& AAM_Shape::operator+=(const AAM_Shape &s)
 }
 
 
-AAM_Shape AAM_Shape::operator-(const AAM_Shape &s)
+AAM_Shape AAM_Shape::operator-(const AAM_Shape &s)const
 {    
 //	return AAM_Shape(*this) -= s;
 	
@@ -93,7 +86,7 @@ AAM_Shape& AAM_Shape::operator-=(const AAM_Shape &s)
 }
 
 
-AAM_Shape AAM_Shape::operator*(double value)
+AAM_Shape AAM_Shape::operator*(double value)const
 {
 //	return AAM_Shape(*this) *= value;
 	
@@ -118,7 +111,7 @@ AAM_Shape& AAM_Shape::operator*=(double value)
 }
 
 
-double AAM_Shape::operator*(const AAM_Shape &s)
+double AAM_Shape::operator*(const AAM_Shape &s)const
 {
     double result = 0.0;
     for (int i = 0, size = m_vPoint.size(); i < size; i++)
@@ -130,7 +123,7 @@ double AAM_Shape::operator*(const AAM_Shape &s)
 }
 
 
-AAM_Shape AAM_Shape::operator/(double value)
+AAM_Shape AAM_Shape::operator/(double value)const
 {
  //   return AAM_Shape(*this) /= value;
 
@@ -461,12 +454,12 @@ void AAM_Shape::Point2Mat(CvMat* res)const
 bool AAM_Shape::ReadAnnotations(const std::string &filename)
 {
 	bool isAbsolute;
-	if(strstr(filename.c_str(), "asf")|| strstr(filename.c_str(), "ASF"))
+	if(strstr(filename.c_str(), ".asf")|| strstr(filename.c_str(), ".ASF"))
 	{
 		isAbsolute = false;
 		ReadASF(filename);
 	}
-	else if(strstr(filename.c_str(), "pts") || strstr(filename.c_str(), "PTS"))
+	else if(strstr(filename.c_str(), ".pts") || strstr(filename.c_str(), ".PTS"))
 	{
 		isAbsolute = true;
 		ReadPTS(filename);
